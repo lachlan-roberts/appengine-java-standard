@@ -16,9 +16,10 @@
 
 package com.google.appengine.tools.development;
 
+import javax.servlet.http.HttpServletRequest;
+
 import com.google.appengine.api.NamespaceManager;
 import com.google.appengine.api.users.dev.LoginCookieUtils;
-import javax.servlet.http.HttpServletRequest;
 
 /**
  * {@code LocalHttpRequestEnvironment} is a simple {@link LocalEnvironment} for
@@ -59,12 +60,12 @@ public class LocalHttpRequestEnvironment extends LocalEnvironment {
       int instance, Integer port, HttpServletRequest request, Long deadlineMillis,
       ModulesFilterHelper modulesFilterHelper) {
     super(appId, serverName, majorVersionId, instance, port, deadlineMillis);
-    this.loginCookieData = LoginCookieUtils.getCookieData(request);
-    String requestNamespace = request.getHeader(DEFAULT_NAMESPACE_HEADER);
+    this.loginCookieData = (request == null) ? null : LoginCookieUtils.getCookieData(request);
+    String requestNamespace = (request == null) ? null : request.getHeader(DEFAULT_NAMESPACE_HEADER);
     if (requestNamespace != null) {
       attributes.put(APPS_NAMESPACE_KEY, requestNamespace);
     }
-    String currentNamespace = request.getHeader(CURRENT_NAMESPACE_HEADER);
+    String currentNamespace = (request == null) ? null : request.getHeader(CURRENT_NAMESPACE_HEADER);
     if (currentNamespace != null) {
       attributes.put(CURRENT_NAMESPACE_KEY, currentNamespace);
     } else {
@@ -78,10 +79,11 @@ public class LocalHttpRequestEnvironment extends LocalEnvironment {
       attributes.put(USER_ID_KEY, loginCookieData.getUserId());
       attributes.put(USER_ORGANIZATION_KEY, "");
     }
-    if (request.getHeader(X_APPENGINE_QUEUE_NAME) != null) {
+    if (request != null && request.getHeader(X_APPENGINE_QUEUE_NAME) != null) {
       attributes.put(ApiProxyLocalImpl.IS_OFFLINE_REQUEST_KEY, Boolean.TRUE);
     }
-    attributes.put(HTTP_SERVLET_REQUEST, request);
+    if (request != null)
+      attributes.put(HTTP_SERVLET_REQUEST, request);
     if (modulesFilterHelper != null) {
       attributes.put(DevAppServerImpl.MODULES_FILTER_HELPER_PROPERTY, modulesFilterHelper);
     }

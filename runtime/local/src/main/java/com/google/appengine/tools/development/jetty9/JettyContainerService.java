@@ -16,7 +16,26 @@
 
 package com.google.appengine.tools.development.jetty9;
 
-import static com.google.appengine.tools.development.LocalEnvironment.DEFAULT_VERSION_HOSTNAME;
+import java.io.File;
+import java.io.FilenameFilter;
+import java.io.IOException;
+import java.net.URL;
+import java.security.Permissions;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import java.util.regex.Pattern;
+import javax.servlet.DispatcherType;
+import javax.servlet.RequestDispatcher;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 import com.google.appengine.api.log.dev.DevLogHandler;
 import com.google.appengine.api.log.dev.LocalLogService;
@@ -39,26 +58,6 @@ import com.google.common.base.Predicates;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.ImmutableList;
 import com.google.common.io.Files;
-import java.io.File;
-import java.io.FilenameFilter;
-import java.io.IOException;
-import java.net.URL;
-import java.security.Permissions;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Semaphore;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import java.util.regex.Pattern;
-import javax.servlet.DispatcherType;
-import javax.servlet.RequestDispatcher;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import org.eclipse.jetty.server.HttpChannel;
 import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Request;
@@ -70,6 +69,8 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.Scanner;
 import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.webapp.WebAppContext;
+
+import static com.google.appengine.tools.development.LocalEnvironment.DEFAULT_VERSION_HOSTNAME;
 
 /**
  * Implements a Jetty backed {@link ContainerService}.
@@ -140,6 +141,9 @@ public class JettyContainerService extends AbstractContainerService {
   /** Collection of current LocalEnvironments */
   private final Set<LocalEnvironment> environments = ConcurrentHashMap.newKeySet();
 
+  /** Default environment if not other LocalEnvironment is available. */
+  private LocalEnvironment defaultEnvironment;
+
   private class JettyAppContext implements AppContext {
     @Override
     public ClassLoader getClassLoader() {
@@ -186,7 +190,7 @@ public class JettyContainerService extends AbstractContainerService {
             // to use.  In that case another environment not associated with a request will need to
             // be created for such flushes.
             LocalEnvironment env = request == null
-                    ? environments.stream().findAny().orElse(null)
+                    ? defaultEnvironment
                     : (LocalEnvironment) request.getAttribute(LocalEnvironment.class.getName());
             if (env != null) {
               ApiProxy.setEnvironmentForCurrentThread(env);
@@ -277,6 +281,16 @@ public class JettyContainerService extends AbstractContainerService {
     if (Boolean.parseBoolean(System.getProperty("appengine.allowRemoteShutdown"))) {
       context.addServlet(new ServletHolder(new ServerShutdownServlet()), "/_ah/admin/quit");
     }
+
+    defaultEnvironment = new LocalHttpRequestEnvironment(
+        appEngineWebXml.getAppId(),
+        WebModule.getModuleName(appEngineWebXml),
+        appEngineWebXml.getMajorVersionId(),
+        instance,
+        getPort(),
+        null,
+        SOFT_DEADLINE_DELAY_MS,
+        modulesFilterHelper);
 
     return appRoot;
   }

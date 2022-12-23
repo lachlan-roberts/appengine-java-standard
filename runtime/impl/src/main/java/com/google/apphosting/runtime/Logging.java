@@ -111,6 +111,7 @@ public final class Logging {
           logManagerProperties.put(name + ".level", level);
         }
       }
+      /*
       if (property.endsWith(".formatter")) {
         String name = property.substring(0, property.length() - ".level".length());
         String formatter = configProps.getProperty(property);
@@ -118,6 +119,7 @@ public final class Logging {
           handlers.get(name).setFormatter(formatter);
         }
       }
+       */
     }
     configProps.remove("handlers");
 

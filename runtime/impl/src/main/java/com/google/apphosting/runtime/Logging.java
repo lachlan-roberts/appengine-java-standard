@@ -16,31 +16,15 @@
 
 package com.google.apphosting.runtime;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.io.PrintStream;
+import javax.annotation.Nullable;
+import java.io.*;
 import java.lang.reflect.Field;
 import java.nio.file.Path;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Properties;
-import java.util.Set;
-import java.util.StringTokenizer;
+import java.util.*;
 import java.util.logging.Formatter;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogManager;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
-import javax.annotation.Nullable;
+import java.util.logging.*;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /** Configures logging for the GAE Java Runtime. */
 public final class Logging {
@@ -103,17 +87,35 @@ public final class Logging {
       return;
     }
 
-    // Ignore levels on handlers similarly to java7 runtime.
-    Set<String> handlers = splitList(configProps.getProperty("handlers"));
+    // TODO: review https://cloud.google.com/logging/docs/setup/java
+
+    Map<String, Handler> handlers = new HashMap<>();
+    for (String handlerName : splitList(configProps.getProperty("handlers"))) {
+      try {
+        Handler handler = (Handler) Class.forName(handlerName).getDeclaredConstructor().newInstance();
+        rootLogger.addHandler(handler);
+        handlers.put(handlerName, handler);
+      } catch (Throwable t) {
+        logger.log(Level.SEVERE, "Unable to construct handler class.", t);
+      }
+    }
+
     for (String property : configProps.stringPropertyNames()) {
       if (property.endsWith(".level")) {
         String name = property.substring(0, property.length() - ".level".length());
-        if (handlers.contains(name)) {
-          // Properties.stringPropertyNames() gives a new Set so
-          // it is OK to modify the properties here.
+        String level = configProps.getProperty(property);
+        if (handlers.containsKey(name)) {
+          handlers.get(name).setLevel(Level.parse(level));
           configProps.remove(property);
         } else {
-          logManagerProperties.put(name + ".level", configProps.getProperty(property));
+          logManagerProperties.put(name + ".level", level);
+        }
+      }
+      if (property.endsWith(".formatter")) {
+        String name = property.substring(0, property.length() - ".level".length());
+        String formatter = configProps.getProperty(property);
+        if (handlers.containsKey(name)) {
+          handlers.get(name).setFormatter(formatter);
         }
       }
     }
